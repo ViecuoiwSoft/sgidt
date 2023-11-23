@@ -10,30 +10,26 @@ class Track:
         if len(self.lanes) > 0:
             return self.lanes[0].area[Lane.REFERENCE].get_reference_pos()
 
-    def append(self, lane_type, length: float, radian=0., clockwise=False, x=0., y=0., hdg=0.):
+    def append(self, lane_type: int, length: float, radian=0., clockwise=False, x=0., y=0., hdg=0.):
         if self.lanes is not None:
             reference = self.lanes[-1].area[Lane.REFERENCE]
-            if (lane_type is reference.lane_type) and (lane_type is Geometry.LANE_TYPE_LINE):
-                return
+            if lane_type == reference.lane_type and lane_type == Geometry.LANE_TYPE_LINE:
+                return  # poka-yoke
             else:
-                end_pos = reference.get_reference_pos(Geometry.END)
-                x = end_pos[0]
-                y = end_pos[1]
-                hdg = end_pos[2]
+                x, y, hdg = reference.get_reference_pos(Geometry.END)
         else:
             self.lanes = []
-        new_reference = Geometry(lane_type, x, y, hdg, length, radian, clockwise)
-        self.lanes.append(Lane(self.width, new_reference))
+        self.lanes.append(Lane(self.width, Geometry(lane_type, x, y, hdg, length, radian, clockwise)))
 
     def random_generate(self):
         self.lanes = []
         pass
 
     def generate_preset_1(self):
-        self.append(Geometry.LANE_TYPE_LINE, 400., 0., False, 400, 300.)
-        self.append(Geometry.LANE_TYPE_ARC, 100., pi)
+        self.append(Geometry.LANE_TYPE_LINE, 400., 0., False, 200, 150.)
+        self.append(Geometry.LANE_TYPE_ARC, 150., pi)
         self.append(Geometry.LANE_TYPE_LINE, 400.)
-        self.append(Geometry.LANE_TYPE_ARC, 100., pi)
+        self.append(Geometry.LANE_TYPE_ARC, 150., pi)
 
 
 class Lane:

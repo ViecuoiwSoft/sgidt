@@ -26,8 +26,8 @@ class Geometry:
 
     def __init__(self, lane_type: int, x=0., y=0., hdg=0., length=0., radian=0., clockwise=False):
         self.lane_type: int = lane_type
-        self.x: float = x
-        self.y: float = y
+        self.x: float = x  # coordinates indicate the
+        self.y: float = y  # start of reference line
         self.hdg: float = hdg
         self.length: float = length  # when lane type is the arc this param indicates the radius
         self.radian: float = radian
@@ -42,15 +42,7 @@ class Geometry:
             y += self.length * percentage * sin(hdg)
         else:
             angle = self.radian * percentage
-            right_angle = pi / 2
-            if self.clockwise:
-                angle = -angle
-                right_angle = -right_angle
-            x = x + self.length * (
-                    cos(turn(self.hdg, right_angle)) + cos(turn(self.hdg, angle - right_angle)))
-            y = y + self.length * (
-                    sin(turn(self.hdg, right_angle)) + sin(turn(self.hdg, angle - right_angle)))
-            hdg = turn(hdg, angle)
+            x, y, hdg = orbit(x, y, self.hdg, self.length, angle, self.clockwise)
         return x, y, hdg
 
     def get_side(self, width: int, side: int):
@@ -90,8 +82,30 @@ class Geometry:
 
 def turn(hdg: float, angle: float) -> float:
     hdg += angle
-    if hdg > pi * 2:
+    while hdg > pi * 2:
         hdg -= pi * 2
-    elif hdg < 0:
+    while hdg < 0:
         hdg += pi * 2
     return hdg
+
+
+def orbit(x: float, y: float, hdg: float, r: float, angle: float, clockwise=True) -> tuple[float, float, float]:
+    right_angle = pi / 2
+    if clockwise:
+        angle = -angle
+        right_angle = -right_angle
+    x = x + r * (cos(turn(hdg, right_angle)) + cos(turn(hdg, angle - right_angle)))
+    y = y + r * (sin(turn(hdg, right_angle)) + sin(turn(hdg, angle - right_angle)))
+    hdg = turn(hdg, angle)
+    return x, y, hdg
+
+
+def my_rect(x: float, y: float, length: int, width: int, rot=0.):
+    dx1 = length * cos(rot)
+    dy1 = width * cos(rot)
+    dx2 = width * sin(rot)
+    dy2 = length * sin(rot)
+    x = x - dx1 / 2 + dx2 / 2
+    y = y - dy1 / 2 - dy2 / 2
+    return (x, y), (x - dx2, y + dy1), \
+        (x + dx1 - dx2, y + dy1 + dy2), (x + dx1, y + dy2)
