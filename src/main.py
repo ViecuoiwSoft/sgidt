@@ -1,16 +1,23 @@
-# This is a sample Python script.
+from display import *
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
-
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    pygame.init()
+    screen = pygame.display.set_mode((800, 600))
+    pygame.display.set_caption("Test Car")
+    track = Track(None, 40.)
+    track.generate_preset_1()
+    player = Car()
+    player.set(track)
+    player.reset()
+    process1 = Process(player, screen)
+    end = False
+    clock = pygame.time.Clock()
+    f = 60.
+    while not end:
+        end = process1.update(f)
+        screen.fill("white")
+        process1.draw_track(track)
+        process1.draw_car()
+        pygame.display.flip()
+        clock.tick(f)
+    pygame.quit()

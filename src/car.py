@@ -1,3 +1,5 @@
+import sys
+
 from track import *
 
 """
@@ -10,11 +12,13 @@ from track import *
 # using 0 in calculation may occur 'fake collision', maybe it's the reason
 # I just being lazy to find out the true reason of this problem(maybe the matter of bad algorithm)
 # so use this magic number instead, just a very small negative number
-ERROR_CORRECTION = -10e-7
 TIME_QUANTITY = 60
 
 
 class Car:
+    SensorRange = 50
+    InvalidRes = (-SensorRange, -SensorRange, -SensorRange, -SensorRange, -SensorRange)
+
     def __init__(self, length=20, width=12, max_speed=5., max_acceleration=2., max_turning=0.25):
         self.length = length
         self.width = width
@@ -84,45 +88,68 @@ class Car:
         p_at_lane = 0
         for lane in self.track.lanes:
             for p in self.get_decision_points():
-                if at_lane(p[0], p[1], lane):
+                if lane.at_lane(p[0], p[1]):
                     p_at_lane += 1
         self.collided = p_at_lane < 4
+        if self.collided:
+            self.speed = 0
+            self.acceleration = 0
 
     def get_decision_points(self):
         return my_rect(self.x, self.y, self.length, self.width, self.hdg)
 
     def check_at_lane(self):
-        ps = self.get_decision_points()
-        ns = ('LB', 'RB', 'RF', 'LF')
-        for i in range(4):
-            print('%s: (%f, %f)' % (ns[i], ps[i][0], ps[i][1]))
-        for j in range(len(self.track.lanes)):
-            for i in range(4):
-                if not at_lane(*ps[i], self.track.lanes[j]):
-                    print('%s is not at lane %d' % (ns[i], j))
-                else:
-                    print('%s is at lane %d' % (ns[i], j))
+        # ps = self.get_decision_points()
+        # ns = ('LB', 'RB', 'RF', 'LF')
+        # for i in range(4):
+        #     print('%s: (%f, %f)' % (ns[i], ps[i][0], ps[i][1]))
+        # for j in range(len(self.track.lanes)):
+        #     for i in range(4):
+        #         if not at_lane(*ps[i], self.track.lanes[j]):
+        #             print('%s is not at lane %d' % (ns[i], j))
+        #         else:
+        #             print('%s is at lane %d' % (ns[i], j))
+        pass
 
     def reset(self):
         if self.track is not None:
             self.set(self.track, *self.track.lanes[0].area[Lane.REFERENCE].get_reference_pos())
+
+    def get_distance(self, sensor_dir: float) -> float:
+        res = 0  # invalid result
+        if self.track is None:
+            return res
+        x = self.x + self.length / 2 * cos(self.hdg)
+        y = self.y + self.length / 2 * sin(self.hdg)
+        lane: Lane
+        for lane in self.track.lanes:
+            a = lane.area
+            for s in (a[Lane.LEFT_SIDE], a[Lane.RIGHT_SIDE]):
+                temp = s.get_distance(x, y, sensor_dir)
+                if temp is None or temp <= 0:
+                    continue
+                if res == 0:
+                    res = min(temp, Car.SensorRange)
+                else:
+                    res = min(min(temp, Car.SensorRange), res)
+        return res if res > 0 else -Car.SensorRange
 
 
 def at_lane(x: float, y: float, lane: Lane) -> bool:
     res: bool
     g = lane.area[Lane.REFERENCE]
     normal = g.hdg
-    pos = g.get_reference_pos(Geometry.END)
     if g.lane_type is Geometry.LANE_TYPE_LINE:
         # res = abs(dot(v, vr)) <= lane.width / 2 and 0 <= dot(v, (cos(g.hdg), sin(g.hdg))) <= g.length
         pd = dot((x - g.x, y - g.y), (cos(g.hdg), sin(g.hdg)))
         res = ERROR_CORRECTION <= pd <= g.length  # using magic number instead of 0
     else:
         normal = turn(normal, -pi / 2) if g.clockwise else turn(normal, pi / 2)
+        a = g.get_reference_pos(Geometry.END)[2]
         c_x = g.x - g.length * cos(normal)
         c_y = g.y - g.length * sin(normal)
         vr = (x - c_x, y - c_y)
-        res = dot((cos(g.hdg), sin(g.hdg)), vr) >= 0 >= dot((cos(pos[2]), sin(pos[2])), vr)
+        res = dot((cos(g.hdg), sin(g.hdg)), vr) >= 0 >= dot((cos(a), sin(a)), vr)
     res = res and at_right(x, y, lane.area[Lane.LEFT_SIDE]) and not at_right(x, y, lane.area[Lane.RIGHT_SIDE])
     return res
 
@@ -146,9 +173,5 @@ def at_right(x: float, y: float, g: Geometry) -> bool:
             dx = dx + g.length * cos(turn(g.hdg, -pi / 2)) - x
             dy = dy - g.length * sin(turn(g.hdg, -pi / 2)) - y
             res = dx * dx + dy * dy >= g.length * g.length
-        # print('(%.2f, %.2f) - (%.2f, %.2f): (dx = %.2f, dy = %.2f, r = %.2f)' % (x, y, cx, cy, dx, dy, g.length))
+        # print('(%.2f, %.2f) - (cx, cy): (dx = %.2f, dy = %.2f, r = %.2f)' % (x, y, dx, dy, g.length))
     return res
-
-
-def dot(v1: tuple[int | float, int | float], v2: tuple[int | float, int | float]) -> int | float:
-    return v1[0] * v2[0] + v1[1] * v2[1]
