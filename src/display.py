@@ -1,5 +1,7 @@
 import pygame
+import numpy as np
 from car import *
+
 
 class Process:
     Control_w = 0
@@ -7,12 +9,22 @@ class Process:
     Control_s = 2
     Control_d = 3
     Reset = 4
+    Functional = 5
 
-    def __init__(self, car: Car = None, surface: pygame.Surface = None):
-        self.player = car
+    def __init__(self, surface: pygame.Surface = pygame.display.set_mode((800, 600)), frame_rate: float = 60):
+        obj = Track(None, 40.)
+        obj.generate_preset_1()
+        self.track = obj
+        obj = Car()
+        obj.set(self.track)
+        obj.reset()
+        self.player = obj
+        self.sensor = Sensor(self.player)
+        self.control = [False, False, False, False, False, False]
         self.surface = surface
-        self.tracks = []
-        self.control = [False, False, False, False, False]
+        self.frame_rate = frame_rate
+        self.clock = pygame.time.Clock()
+        pygame.display.set_caption("Test Car")
 
     def __update_control_k_d(self, e: pygame.event.Event):
         if e.key == pygame.K_w:
@@ -26,6 +38,10 @@ class Process:
         elif e.key == pygame.K_r and not self.control[Process.Reset]:
             self.player.reset()
             self.control[Process.Reset] = True
+        elif e.key == pygame.K_SPACE and not self.control[Process.Functional]:
+            self.player.check_at_lane()
+            self.sensor.print_info()
+            self.control[Process.Functional] = True
 
     def __update_control_k_u(self, e: pygame.event.Event):
         if e.key == pygame.K_w:
@@ -38,12 +54,15 @@ class Process:
             self.control[Process.Control_d] = False
         elif e.key == pygame.K_r:
             self.control[Process.Reset] = False
+        elif e.key == pygame.K_SPACE:
+            self.control[Process.Functional] = False
 
     # draw a car(rotated rectangle) by using pygame.draw.line 4 times
     # then draw the wheels
     def draw_car(self):
         draw_my_rect(self.surface, self.player.get_decision_points())
         self.draw_wheels()
+        self.show_sensor()
 
     # consider issue of screen coordinate system(c.hdg - c.turn)
     def draw_wheels(self):
@@ -54,30 +73,22 @@ class Process:
         draw_my_rect(self.surface, my_rect(x + c.width * sin(c.hdg), y - c.width * cos(c.hdg),
                                            c.length / 4, c.width / 3, c.hdg - c.turn))
 
-    def draw_track(self, t: Track):
-        start_pos = t.lanes[0].area[Lane.REFERENCE].get_reference_pos()
+    def draw_track(self):
+        start_pos = self.track.lanes[0].area[Lane.REFERENCE].get_reference_pos()
         pygame.draw.circle(self.surface, "black", (start_pos[0], start_pos[1]), 5., 1)
-        for lane in t.lanes:
-            for side in (Lane.LEFT_SIDE, Lane.RIGHT_SIDE):
-                geometry = lane.area[side]
-                p = geometry.get_reference_pos(Geometry.START)
-                x1 = p[0]
-                y1 = p[1]
-                a1 = -p[2]
-                p = geometry.get_reference_pos(Geometry.END)
-                x2 = p[0]
-                y2 = p[1]
-                a2 = -p[2]
-                if geometry.lane_type is Geometry.LANE_TYPE_LINE:
-                    pygame.draw.line(self.surface, "black", (x1, y1), (x2, y2))
-                else:
-                    right_angle = -pi / 2 if geometry.clockwise else pi / 2
-                    a1 = turn(a1, right_angle)
-                    a2 = turn(a2, right_angle)
-                    rect = get_rect(geometry)
-                    pygame.draw.arc(self.surface, "black", rect, a2, a1)
+        for lane in self.track.lanes:
+            draw_lane(self.surface, lane)
 
-    def update(self, framerate: float) -> bool:
+    def show_sensor(self):
+        s = self.sensor
+        s.get_distance()
+        d = turn(s.dir, -s.sensor_area / 2)
+        da = s.sensor_area / (s.sensor_count - 1)
+        for i in range(s.sensor_count):
+            pygame.draw.line(self.surface, 'black', (s.x, s.y), get_end_point(s.x, s.y, d, s.state[i]))
+            d = turn(da, d)
+
+    def update(self) -> bool:
         throttle = 0.
         turning = 0.
         for e in pygame.event.get():
@@ -102,7 +113,15 @@ class Process:
             # turning = -self.player.max_turning / framerate * pi
         # return self.player.update(throttle, turning)
         self.player.update(throttle, turning)
+        self.sensor.update_pos()
         return False
+
+    def update_screen(self):
+        self.surface.fill("white")
+        self.draw_track()
+        self.draw_car()
+        pygame.display.flip()
+        self.clock.tick(self.frame_rate)
 
 
 def get_rect(arc: Geometry) -> pygame.Rect:
@@ -121,23 +140,82 @@ def draw_my_rect(surface: pygame.surface,
         pygame.draw.line(surface, 'black', ps[i], ps[(i + 1) % 4])
 
 
-pygame.init()
-screen = pygame.display.set_mode((800, 600))
-pygame.display.set_caption("Test Car")
-track1 = Track(None, 40.)
-track1.generate_preset_1()
-player = Car()
-player.set(track1)
-player.reset()
-process1 = Process(player, screen)
-end = False
-clock = pygame.time.Clock()
-f = 60.
-while not end:
-    end = process1.update(f)
-    screen.fill("white")
-    process1.draw_track(track1)
-    process1.draw_car()
-    pygame.display.flip()
-    clock.tick(f)
-pygame.quit()
+def draw_lane(surface: pygame.surface, lane: Lane):
+    for side in (Lane.LEFT_SIDE, Lane.RIGHT_SIDE):
+        geometry = lane.area[side]
+        p = geometry.get_reference_pos(Geometry.START)
+        x1 = p[0]
+        y1 = p[1]
+        a1 = -p[2]
+        p = geometry.get_reference_pos(Geometry.END)
+        x2 = p[0]
+        y2 = p[1]
+        a2 = -p[2]
+        if geometry.lane_type is Geometry.LANE_TYPE_LINE:
+            pygame.draw.line(surface, "black", (x1, y1), (x2, y2))
+        else:
+            right_angle = -pi / 2 if geometry.clockwise else pi / 2
+            a1 = turn(a1, right_angle)
+            a2 = turn(a2, right_angle)
+            rect = get_rect(geometry)
+            # temporary fix
+            if geometry.clockwise:
+                temp = a2
+                a2 = a1
+                a1 = temp
+            pygame.draw.arc(surface, "black", rect, a2, a1)
+
+
+class Sensor:
+    def __init__(self, car: Car, sensor_range: float = 50, sensor_area: float = pi, sensor_count: int = 5):
+        self.car = car
+        self.sensor_range = sensor_range
+        self.sensor_area = sensor_area
+        self.sensor_count = sensor_count
+        self.offset = self.car.length / 2
+        self.x = None
+        self.y = None
+        self.dir = None
+        self.state = np.zeros(sensor_count + 1)
+        self.update_pos()
+
+    def update_pos(self):
+        self.dir = self.car.hdg
+        self.x = self.car.x + self.offset * cos(self.dir)
+        self.y = self.car.y + self.offset * sin(self.dir)
+
+    def get_distance(self):
+        if self.car.track is None or self.sensor_count == 1:
+            return
+        track = self.car.track
+        d = turn(self.dir, -self.sensor_area / 2)
+        da = self.sensor_area / (self.sensor_count - 1)
+        for i in range(self.sensor_count):
+            s_d = 0  # invalid result
+            lane: Lane
+            for lane in track.lanes:
+                a = lane.area
+                for s in (a[Lane.LEFT_SIDE], a[Lane.RIGHT_SIDE]):
+                    temp = s.get_distance(self.x, self.y, d)
+                    if temp is None or temp <= 0:
+                        continue
+                    if s_d == 0:
+                        s_d = min(temp, self.sensor_range)
+                    else:
+                        s_d = min(min(temp, self.sensor_range), s_d)
+            self.state[i] = s_d
+            d = turn(d, da)
+
+    def print_info(self):
+        if self.sensor_count == 1:
+            return
+        d = turn(self.dir, -self.sensor_area / 2)
+        da = self.sensor_area / (self.sensor_count - 1)
+        for i in range(self.sensor_count):
+            print('dir %d(%.2f deg) - %.3f' % (i, d / pi * 180, self.state[i]))
+            d = turn(d, da)
+
+    def get_state(self) -> np.ndarray:
+        self.get_distance()
+        self.state[self.sensor_count] = self.car.speed
+        return self.state

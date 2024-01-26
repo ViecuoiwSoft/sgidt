@@ -1,16 +1,19 @@
-# This is a sample Python script.
+from env import *
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+PATH = './model.pth'
 
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
-
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    pygame.init()
+    # process = Process()
+    # end = False
+    # while not end:
+    #     process.update_screen()
+    #     end = process.update()
+    # pygame.quit()
+    env = Env()
+    print('emulation started')
+    env.dqn.eval_net.load_state_dict(torch.load(PATH))
+    for i in range(100):
+        r = env.iterate()
+        print('it: %d, total_reward: %.2f' % (i, r))
+    torch.save(env.dqn.target_net.state_dict(), PATH)
