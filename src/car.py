@@ -12,6 +12,9 @@ from track import *
 # using 0 in calculation may occur 'fake collision', maybe it's the reason
 # I just being lazy to find out the true reason of this problem(maybe the matter of bad algorithm)
 # so use this magic number instead, just a very small negative number
+#
+# ... where it has gone?
+
 TIME_QUANTITY = 60
 
 

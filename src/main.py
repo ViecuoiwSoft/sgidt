@@ -1,23 +1,19 @@
-from display import *
+from env import *
+
+PATH = './model.pth'
 
 if __name__ == '__main__':
     pygame.init()
-    screen = pygame.display.set_mode((800, 600))
-    pygame.display.set_caption("Test Car")
-    track = Track(None, 40.)
-    track.generate_preset_1()
-    player = Car()
-    player.set(track)
-    player.reset()
-    process1 = Process(player, screen)
-    end = False
-    clock = pygame.time.Clock()
-    f = 60.
-    while not end:
-        end = process1.update(f)
-        screen.fill("white")
-        process1.draw_track(track)
-        process1.draw_car()
-        pygame.display.flip()
-        clock.tick(f)
-    pygame.quit()
+    # process = Process()
+    # end = False
+    # while not end:
+    #     process.update_screen()
+    #     end = process.update()
+    # pygame.quit()
+    env = Env()
+    print('emulation started')
+    env.dqn.eval_net.load_state_dict(torch.load(PATH))
+    for i in range(100):
+        r = env.iterate()
+        print('it: %d, total_reward: %.2f' % (i, r))
+    torch.save(env.dqn.target_net.state_dict(), PATH)
